@@ -27,6 +27,9 @@ const ALL_19_STEP_IDS = [
   "05-extract-candidate-summary",
   "06-reserve-topic",
   "07-select-candidate",
+  // 2026-09: the content-mode rotation. The trend scout (07a) does NOT appear
+  // here: the seeded catalog planned this run's topic, so the scout never runs.
+  "07b-select-content-mode",
   "08-determine-archetype",
   "09-draft-post",
   // AU20: the VERIFIED half of de-duplication. `recentPosts` in the drafting
@@ -34,11 +37,16 @@ const ALL_19_STEP_IDS = [
   // draft against the same excerpt window, inside the drafting pass, so the
   // reviewer is never shown a draft that was not measured.
   "09a-verify-not-duplicate",
+  // 2026-09: the shape check after the deterministic reflow — notes, never a hold.
+  "09b-verify-formatting",
   "10-verify-numbers-sourced",
   "11-verify-brand-compliance",
   "12-render-preview-check",
   "13-verify-no-placeholder",
   "14-verify-no-leak",
+  // 2026-09: the media resolver. Always a step; with no media tools in this
+  // registry and no brief on the draft it records `none` and moves on.
+  "14b-resolve-media",
   // Revision-scoped: `-r0` is the first review round. A `revise` decision
   // registers `-r1` after re-drafting.
   "15-batch-review-r0",
@@ -54,6 +62,7 @@ function goodDraft() {
     body: "Teams with a fixed two-day in-office schedule reported meaningfully fewer scheduling conflicts than teams with fully flexible policies.",
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "If your team is still negotiating its hybrid policy week to week, a fixed anchor-day structure might be worth testing.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "People leaders evaluating hybrid work policies",
     archetype: "teardown-framework" as const,
     text:

@@ -107,6 +107,7 @@ describe("cross-run adaptation (IGSTYLE-5)", () => {
       "A single config change fixed a bug that had lingered for a year.",
     ];
     const copyForRunB = {
+      format: "carousel" as const,
       caption: "None of this happened last quarter — a completely fresh set of updates.",
       // `sourceRef` stays the ORIGINAL research fact's claim, verbatim — the
       // terminal self-check requires every slide's `sourceRef` to match a

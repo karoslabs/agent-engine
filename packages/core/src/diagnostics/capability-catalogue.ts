@@ -202,6 +202,19 @@ export const CAPABILITY_CATALOGUE: readonly CapabilityDefinition[] = [
     rationale: "Satisfied by GOOGLE_CLOUD_PROJECT, which every deployed environment sets.",
     shortfall: "no image generation",
   },
+  {
+    id: "vision-inspection",
+    title: "Vision inspection — a model that looks at the pictures a post will carry",
+    owner: "packages/tools/karos-media (media.inspectImages)",
+    requires: [
+      { name: "GEMINI_VERTEX_PROJECT_ID", kind: "alternative" },
+      { name: "GOOGLE_CLOUD_PROJECT", kind: "alternative" },
+    ],
+    whenAbsent:
+      "A client-attached image is described to the copy step from its upload label only, so the words are written beside the picture rather than to it; sourced candidates are judged from provider alt text and licence lines alone, so a watermark or a cookie-wall screenshot is caught only if the text happens to say so.",
+    rationale: "Same Vertex credential as image generation; satisfied by GOOGLE_CLOUD_PROJECT, which every deployed environment sets.",
+    shortfall: "images judged from text, not pixels",
+  },
 
   // ── Video ────────────────────────────────────────────────────────────────
   {

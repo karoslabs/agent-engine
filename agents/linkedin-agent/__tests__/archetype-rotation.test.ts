@@ -14,6 +14,7 @@ function goodDraft(archetype: LinkedInArchetype = "teardown-framework") {
     body: "The team documented every step and the change stuck because everyone could see why it mattered.",
     hashtags: ["HybridWork"],
     callToAction: "Worth comparing notes if your team is mid-rollout too.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "Operations leaders",
     archetype,
     text:

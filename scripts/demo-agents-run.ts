@@ -218,6 +218,7 @@ async function runXAgentDemo(workspaceStore: WorkspaceStore, tools: ReturnType<t
     lane: "knowledge",
     targetHandle: "@acmecorp",
     mediaRefs: [],
+    thread: [],
   };
   const router = fakeRouterSequence([finalTurn(draft, { inputTokens: 140, outputTokens: 45 })]);
   const workflowFn = createXAgentWorkflow({ tools, promptStore, router });
@@ -296,6 +297,7 @@ async function runLinkedInAgentDemo(workspaceStore: WorkspaceStore, tools: Retur
     // never sets hasNumericInsight, so sources is always empty (same reason
     // the X agent's fake draft below only gestures at "data" without a figure).
     body: "Teams with a fixed two-day in-office schedule reported meaningfully fewer scheduling conflicts [1] than teams with fully flexible policies.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "If your team is still negotiating its hybrid policy week to week, a fixed anchor-day structure might be worth testing.",
     targetAudience: "People leaders and operations managers evaluating hybrid work policies",

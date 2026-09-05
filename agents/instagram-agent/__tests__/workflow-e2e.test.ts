@@ -68,6 +68,10 @@ const HAPPY_PATH_STEP_IDS = [
   "04e-read-output-history",
   // The client's intel report, distilled into drafting context.
   "04f-read-intel-context",
+  // 2026-09: the post format — a request, the client's setting, or the auto
+  // rotation; `carousel` by default. The trend scout (03a-03c) does NOT appear
+  // here: the seeded catalog planned this run's topic, so it never runs.
+  "04h-select-format",
   // IGSTYLE-3: this round's style directive (§2.2 Layer 2) — revision 0 with
   // no structured pick and no feedback resolves to `{overrides:{}, source:"none"}`
   // unconditionally, so no refusal-recording step follows it here.

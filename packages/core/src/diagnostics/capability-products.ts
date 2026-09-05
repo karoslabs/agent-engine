@@ -68,17 +68,21 @@ export interface ProductCapabilities {
  */
 export const PRODUCT_CAPABILITIES: readonly ProductCapabilities[] = [
   // ── Channel content ──────────────────────────────────────────────────────
+  // 2026-09: both text-first channels now source a picture (attached, a
+  // screenshot of the cited page, the article's lead image, stock, generation
+  // last) and read it with a vision model. Every one of those is an
+  // enhancement — the post ships as text without them.
   {
     productId: "x-agent",
     title: "X posts",
     requires: ["external-research", "durable-workspace", "prompt-store"],
-    enhances: [],
+    enhances: ["image-search-curated", "image-generation", "vision-inspection", "media-artifact-storage"],
   },
   {
     productId: "linkedin-agent",
     title: "LinkedIn posts",
     requires: ["external-research", "durable-workspace", "prompt-store"],
-    enhances: [],
+    enhances: ["image-search-curated", "image-generation", "vision-inspection", "media-artifact-storage"],
   },
   {
     productId: "reddit-agent",
@@ -111,7 +115,7 @@ export const PRODUCT_CAPABILITIES: readonly ProductCapabilities[] = [
     productId: "instagram-agent",
     title: "Instagram carousels",
     requires: ["external-research", "durable-workspace", "prompt-store", "media-artifact-storage"],
-    enhances: ["image-search-curated", "venue-photography", "image-generation"],
+    enhances: ["image-search-curated", "venue-photography", "image-generation", "vision-inspection"],
   },
   {
     productId: "branded-shorts-agent",

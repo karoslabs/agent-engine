@@ -26,6 +26,10 @@ const ALL_21_STEP_IDS = [
   "05-extract-candidate-summary",
   "06-reserve-topic",
   "07-select-candidate",
+  // 2026-09: the content-mode rotation (hot news / deep value / open
+  // discussion). The trend scout (07a) does NOT appear here: the seeded
+  // catalog planned this run's topic, so the scout never runs.
+  "07b-select-content-mode",
   "08-select-lane",
   "09-check-engagement-cap",
   "10-draft-post",
@@ -42,6 +46,9 @@ const ALL_21_STEP_IDS = [
   // must be revisable, not a post-approval dead end.
   "14c-verify-no-placeholder",
   "14d-verify-no-leak",
+  // 2026-09: the media resolver. Always a step; with no media tools in this
+  // registry and no brief on the draft it records `none` and moves on.
+  "14e-resolve-media",
   // Revision-scoped: `-r0` is the first review round. A `revise` decision
   // registers `-r1` after re-drafting.
   "15-batch-review-r0",

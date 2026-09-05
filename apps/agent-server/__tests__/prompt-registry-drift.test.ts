@@ -200,7 +200,7 @@ describe("SCRUM-325: prompt registry and latest.md drift", { timeout: 120_000 },
 
     it("fails when a prompt says 'never invent numbers' but stops naming gate.numbersSourced", () => {
       const root = fixtureRoot((r) => {
-        for (const file of ["4.md", "latest.md"]) {
+        for (const file of ["5.md", "latest.md"]) {
           const p = promptFile(r, "linkedin-agent", "linkedin-craft", file);
           writeFileSync(p, readFileSync(p, "utf8").replaceAll("gate.numbersSourced", "the sourcing check"));
         }
@@ -255,7 +255,7 @@ describe("SCRUM-325: prompt registry and latest.md drift", { timeout: 120_000 },
   it("injects a skillRef pinned to a version the registry does not declare and fails", () => {
     const root = fixtureRoot((r) => {
       const p = path.join(r, "agents", "x-agent", "src", "agent", "x-draft-agent.ts");
-      writeFileSync(p, readFileSync(p, "utf8").replace('skillRef: "x-craft@4"', 'skillRef: "x-craft@9"'));
+      writeFileSync(p, readFileSync(p, "utf8").replace('skillRef: "x-craft@5"', 'skillRef: "x-craft@9"'));
     });
     const { result, exitCode } = runCheck(root);
     const hits = result.problems.filter((p) => p.kind === "unresolvable-pin" && p.promptId === "x-craft");

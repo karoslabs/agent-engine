@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DegradedContextGroundingMarker } from "@agent-engine/workflow";
+import type { DegradedContextGroundingMarker, TrendCandidate } from "@agent-engine/workflow";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Style config + brand tokens (RFC-03 step 02 — "freeze the small files")
@@ -220,14 +220,21 @@ export interface InstagramRunClaim {
   /** An optional client-supplied steer (lane/subject) for this run — may pick a lane, never relax the topics-catalog lock (RFC-03 §3 step 01's note). */
   requestedLane?: string;
   requestedSubject?: string;
+  /**
+   * The post format for this run (2026-09): `carousel`, `single`, or `auto`
+   * (rotate). From the run input's `requestedFormat` first, then the client's
+   * standing `instagramFormat` config; absent means `carousel`, exactly as
+   * every run before formats existed.
+   */
+  requestedFormat?: "carousel" | "single" | "auto";
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // Step 03 — claim topic
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Where step 03's subject came from — decides whether there is a dedup reservation to commit at step 09. */
-export type InstagramTopicSource = "reserved" | "requested" | "research";
+/** Where step 03's subject came from — decides whether there is a dedup reservation to commit at step 09. `trend` (2026-09): the scout's on-brand candidate took the slot. */
+export type InstagramTopicSource = "reserved" | "requested" | "trend" | "research";
 
 export interface InstagramTopicClaim {
   /**
@@ -244,6 +251,8 @@ export interface InstagramTopicClaim {
   reservationKey?: string;
   topic: string;
   source: InstagramTopicSource;
+  /** Present when `source === "trend"`: the scouted candidate, with its angle, hook, why-now and brand-fit bridge. */
+  trend?: TrendCandidate;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -424,9 +433,25 @@ export const InstagramSlideCopySchema = z.object({
 });
 export type InstagramSlideCopy = z.infer<typeof InstagramSlideCopySchema>;
 
-/** `InstagramCopyAgent`'s output — six to eight slides (RFC-03 §3 step 05), enforced directly in the schema. */
+/**
+ * The two shapes an Instagram post takes (2026-09).
+ *
+ * `carousel` is the 6-8 slide format every run produced until now. `single`
+ * is one designed image and a DEEP caption: the caption carries the argument
+ * the slides used to, in short lines, and the one slide is the hook. The
+ * workflow decides the format (a run request, the client's `instagramFormat`
+ * setting, or an `auto` rotation) and hands it to the copy step, which echoes
+ * it back; `checkSlidesData` holds the slide count to it.
+ */
+export const INSTAGRAM_FORMATS = ["carousel", "single"] as const;
+export const InstagramFormatSchema = z.enum(INSTAGRAM_FORMATS);
+export type InstagramFormat = z.infer<typeof InstagramFormatSchema>;
+
+/** `InstagramCopyAgent`'s output — six to eight slides for a carousel (RFC-03 §3 step 05), exactly one for a single-image post; `checkSlidesData` enforces the count per format. */
 export const InstagramCopyOutputSchema = z.object({
-  slides: z.array(InstagramSlideCopySchema).min(6).max(8),
+  /** The format this copy was written for. Defaults to `carousel` so every existing caller and fixture keeps its shape. */
+  format: InstagramFormatSchema.default("carousel"),
+  slides: z.array(InstagramSlideCopySchema).min(1).max(8),
   /**
    * The post's own caption — the text Instagram shows below the carousel,
    * separate from anything baked into the slide images themselves.

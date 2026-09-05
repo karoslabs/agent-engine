@@ -1,3 +1,4 @@
+import type { ContentMode } from "@agent-engine/workflow";
 import { LANE_VALUES, type Lane } from "../agent/x-draft-agent.js";
 import type { XRecentDecision } from "./types.js";
 
@@ -32,6 +33,23 @@ export const LANE_WEIGHT: Record<Lane, number> = {
 export const ENGAGEMENT_DAILY_CAP = 5;
 export const ENGAGEMENT_CAP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Which lanes carry each content mode (2026-09 upgrade). The mode is the
+ * KIND of post the rotation wants this week; the lane is x-craft's own
+ * voice-and-content shape. A hot-news week wants a reaction or a quote of the
+ * source; a deep-value week wants the knowledge lane (or the client's own
+ * build); an open-discussion week wants a take the audience can argue with.
+ *
+ * A preference, not a wall: `selectLane` still honours an explicit request
+ * and still never repeats the prior lane, and falls back to the whole menu
+ * when every preferred lane is the one just used.
+ */
+export const LANES_FOR_MODE: Record<ContentMode, readonly Lane[]> = {
+  "hot-news": ["news-reaction", "quote-comment"],
+  "deep-value": ["knowledge", "build-in-public"],
+  "open-discussion": ["pov", "quote-comment"],
+};
+
 function isLane(value: string): value is Lane {
   return (LANE_LIST as readonly string[]).includes(value);
 }
@@ -64,8 +82,11 @@ export function parseLaneFromSummary(summary: string): Lane | undefined {
  *    across a whole batch isn't meaningful for a one-post-per-run agent, so
  *    "spread usage out over time, weighted toward the default-favored lanes"
  *    is the closest honest analogue.
+ * 3. **`preferred`** (the content mode's lanes, 2026-09) narrows step 2 to
+ *    those lanes when at least one of them is not the prior lane; otherwise
+ *    the whole menu applies as before.
  */
-export function selectLane(requestedLane: string | undefined, recentDecisions: readonly XRecentDecision[]): Lane {
+export function selectLane(requestedLane: string | undefined, recentDecisions: readonly XRecentDecision[], preferred?: readonly Lane[]): Lane {
   if (requestedLane !== undefined && isLane(requestedLane)) {
     return requestedLane;
   }
@@ -86,7 +107,9 @@ export function selectLane(requestedLane: string | undefined, recentDecisions: r
   };
   for (const d of dated) usageCount[d.lane]++;
 
-  const candidates = LANE_LIST.filter((lane) => lane !== priorLane);
+  const everything = LANE_LIST.filter((lane) => lane !== priorLane);
+  const narrowed = preferred !== undefined ? everything.filter((lane) => preferred.includes(lane)) : [];
+  const candidates = narrowed.length > 0 ? narrowed : everything;
   const ranked = candidates.slice().sort((a, b) => {
     const byUsage = usageCount[a] - usageCount[b];
     if (byUsage !== 0) return byUsage;

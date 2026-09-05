@@ -79,6 +79,7 @@ const BAD_HEBREW_BODIES = [
 function hebrewCopy(bodies: readonly string[], caption: string): InstagramCopyOutput {
   const base = goodCopyOutput();
   return {
+    format: "carousel",
     caption,
     slides: base.slides.map((slide, i) => ({
       ...slide,

@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import type { AgentToolRegistry } from "@agent-engine/core";
-import { createWorkspaceStore, defineTool, notAvailable, type WorkspaceStoreLike } from "@agent-engine/tool-common";
+import { createWorkspaceStore, defineTool, notAvailable, type GcsArtifactStoreLike, type WorkspaceStoreLike } from "@agent-engine/tool-common";
 import { z } from "zod";
 import { createFindImages, FindImagesInputSchema } from "./find-images.js";
 import { createGenerateImage, type ImageGenerationClient } from "./generate-image.js";
@@ -9,6 +9,10 @@ import { createHarvestVideo, type VideoHarvestProvider } from "./harvest-video.j
 import { createScrapeImages } from "./scrape-images.js";
 import { createIngestAssets, type ObjectReader } from "./ingest-assets.js";
 import { createGetVisualPatterns, createIngestVisualPatterns, type VisionAnalysisClient } from "./visual-patterns.js";
+import { createInspectImages } from "./inspect-images.js";
+import { createHarvestArticleImages } from "./harvest-article-images.js";
+import { createScreenshotPage, type BrowserLauncher } from "./screenshot-page.js";
+import { createStageAsset } from "./stage-asset.js";
 import { createScraperProvider, type ScraperProvider } from "@agent-engine/tool-karos-scraper";
 import type { ImageSearchProvider } from "./providers.js";
 import { buildProviderRegistry, createImageSource, singleProviderSource, type ImageSource } from "./routing.js";
@@ -25,6 +29,10 @@ export * from "./brand-logo.js";
 export * from "./generate-video.js";
 export * from "./harvest-video.js";
 export * from "./visual-patterns.js";
+export * from "./inspect-images.js";
+export * from "./harvest-article-images.js";
+export * from "./screenshot-page.js";
+export * from "./stage-asset.js";
 
 export interface KarosMediaToolsOptions {
   env?: Record<string, string | undefined>;
@@ -60,6 +68,19 @@ export interface KarosMediaToolsOptions {
   visionClient?: VisionAnalysisClient | null;
   /** SCRUM-321 (AU37). Overrides the vision model id. No env var: the default is a priced, in-catalogue model. */
   visionModel?: string;
+  /**
+   * The GCS media store `media.stageAsset` uploads a chosen image through so
+   * a LinkedIn/X deliverable can carry a URL a reviewer (and the portal) can
+   * open. The same store `publish.renderCarousel` already writes its PNGs to;
+   * absent, staging reports `not_available` and the local path stays in the trace.
+   */
+  mediaStore?: GcsArtifactStoreLike | undefined;
+  /**
+   * Launches the browser `media.screenshotPage` drives. Defaults to Playwright
+   * Chromium (the carousel renderer already ships it); tests inject a fake and
+   * `null` disables the tier explicitly.
+   */
+  browserLauncher?: BrowserLauncher | null;
 }
 
 /**
@@ -100,7 +121,7 @@ export function createKarosMediaTools(options: KarosMediaToolsOptions = {}): Age
         name: "media.findImages",
         description:
           "Stub registered when this deployment supplied an empty provider source: always reports not_available rather than searching, since no image-search provider is configured.",
-        version: "1.0.0",
+        version: "1.0.1",
         inputSchema: FindImagesInputSchema,
         async execute() {
           return notAvailable(
@@ -183,6 +204,25 @@ export function createKarosMediaTools(options: KarosMediaToolsOptions = {}): Age
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     }),
     "media.getVisualPatterns": createGetVisualPatterns(visualPatternStore),
+    // ── Vision: the first tool here that looks at pixels for a content agent.
+    // Same Vertex credential and model as the visual-pattern ingestion, so
+    // enabling it costs no new key. A client upload gets described so the copy
+    // is written TO it; a sourced candidate gets a fit score against the brief.
+    "media.inspectImages": createInspectImages({
+      ...(visionClient ? { client: visionClient } : {}),
+      ...(options.visionModel ? { model: options.visionModel } : {}),
+      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    }),
+    // ── Tier 1b: the cited articles' own lead images. Publisher-owned, so
+    // `unknown` provenance with a credit line — the reviewer decides.
+    "media.harvestArticleImages": createHarvestArticleImages({
+      ...(scraper ? { scraper } : {}),
+      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    }),
+    // ── Tier 1c: a real screenshot of the cited page, the artefact X rewards.
+    "media.screenshotPage": createScreenshotPage({ launcher: options.browserLauncher }),
+    // ── The hand-off: a chosen cached file becomes a fetchable URL.
+    "media.stageAsset": createStageAsset({ mediaStore: options.mediaStore }),
   };
 }
 

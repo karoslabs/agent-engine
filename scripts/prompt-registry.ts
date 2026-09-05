@@ -137,13 +137,13 @@ export const PROMPT_REGISTRY: readonly PromptRegistryEntry[] = [
   {
     promptId: "instagram-copy",
     agent: "instagram-agent",
-    versions: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-    latestVersion: "10",
+    versions: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+    latestVersion: "11",
     requires: { languageDirective: true },
   },
   { promptId: "instagram-image-vet", agent: "instagram-agent", versions: ["1", "2"], latestVersion: "2" },
   { promptId: "instagram-research", agent: "instagram-agent", versions: ["1"], latestVersion: "1" },
-  { promptId: "instagram-visual-qa", agent: "instagram-agent", versions: ["1", "2"], latestVersion: "2" },
+  { promptId: "instagram-visual-qa", agent: "instagram-agent", versions: ["1", "2", "3"], latestVersion: "3" },
   {
     promptId: "intel-report-grounding",
     agent: "intel-report-agent",
@@ -168,8 +168,8 @@ export const PROMPT_REGISTRY: readonly PromptRegistryEntry[] = [
   {
     promptId: "linkedin-craft",
     agent: "linkedin-agent",
-    versions: ["1", "2", "3", "4"],
-    latestVersion: "4",
+    versions: ["1", "2", "3", "4", "5"],
+    latestVersion: "5",
     requires: { languageDirective: true, numbersSourced: true },
   },
   {
@@ -219,8 +219,8 @@ export const PROMPT_REGISTRY: readonly PromptRegistryEntry[] = [
   {
     promptId: "x-craft",
     agent: "x-agent",
-    versions: ["1", "2", "3", "4"],
-    latestVersion: "4",
+    versions: ["1", "2", "3", "4", "5"],
+    latestVersion: "5",
     requires: { languageDirective: true, numbersSourced: true },
   },
 ];

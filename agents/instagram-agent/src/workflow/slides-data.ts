@@ -619,7 +619,13 @@ export async function checkSlidesData(
 ): Promise<SlidesDataSelfCheck> {
   const { canvas, banned_words: bannedWords, banned_chars: bannedChars, compliance } = styleConfig;
 
-  if (copy.slides.length < canvas.slides_min || copy.slides.length > canvas.slides_max) {
+  // The slide count is held to the FORMAT (2026-09): a single-image post is
+  // exactly one slide, a carousel stays inside the client's configured range.
+  if (copy.format === "single") {
+    if (copy.slides.length !== 1) {
+      return { ok: false, reason: `a single-image post carries exactly one slide, this draft carries ${copy.slides.length}` };
+    }
+  } else if (copy.slides.length < canvas.slides_min || copy.slides.length > canvas.slides_max) {
     return {
       ok: false,
       reason: `slide count ${copy.slides.length} is outside the configured range [${canvas.slides_min}, ${canvas.slides_max}]`,

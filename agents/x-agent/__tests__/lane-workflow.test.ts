@@ -51,7 +51,12 @@ describe("the lane system, end to end (Phase 2.5 batch 2.3)", () => {
     expect(result.status).toBe("completed");
     if (result.status !== "completed") throw new Error("unreachable");
     expect(result.output.lane).not.toBe("knowledge");
-    expect(result.output.lane).toBe("pov");
+    // 2026-09: the lane is narrowed to the content mode's lanes. The seeded
+    // decision recorded no mode, so the rotation picks the heaviest mode
+    // (deep-value), whose lanes are knowledge and build-in-public; knowledge
+    // is the prior lane, so build-in-public is the one honest answer.
+    expect(result.output.contentMode).toBe("deep-value");
+    expect(result.output.lane).toBe("build-in-public");
   });
 
   it("an explicit requestedLane in the client config overrides the rotation", async () => {

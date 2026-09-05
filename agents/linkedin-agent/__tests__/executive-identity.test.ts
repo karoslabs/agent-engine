@@ -12,6 +12,7 @@ function goodDraft() {
     body: "Teams with a fixed two-day in-office schedule reported meaningfully fewer scheduling conflicts than teams with fully flexible policies.",
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "If your team is still negotiating its hybrid policy week to week, a fixed anchor-day structure might be worth testing.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "People leaders evaluating hybrid work policies",
     archetype: "teardown-framework" as const,
     text:
@@ -187,7 +188,7 @@ describe("identityScope: executive vs. company (legacy 'two-paths' posting ident
     expect(draftInput.identity).toEqual({ scope: "company" });
 
     const stepRecords = await durableStore.listSteps("linkedin_run_company_default");
-    expect(stepRecords).toHaveLength(24); // AU20 added the verified-dedupe step
+    expect(stepRecords).toHaveLength(27); // AU20 added the verified-dedupe step
   });
 
   it("threads an executive's full dossier (careerHistory, corePillars, offLimitsTopics, voiceTone) into the draft agent's input, not just name+title", async () => {

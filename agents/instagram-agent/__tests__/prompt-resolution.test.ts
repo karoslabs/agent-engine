@@ -55,11 +55,11 @@ describe("PromptStore resolution (RFC-01 §16.1) — nothing here is a hardcoded
     const copyRouter = fakeRouterSequence([finalTurn(goodCopyOutput())]);
     const copyAgent = new InstagramCopyAgent({ router: copyRouter, tools: {}, promptStore });
     await copyAgent.run(ctx, { topic: "x", facts: [], styleConfig: {}, brandTokens: {} });
-    // 10.md: the copy agent is pinned to `instagram-copy@10` (T-A9's
+    // 10.md: the copy agent is pinned to `instagram-copy@11` (T-A9's
     // brandingGuidelines section, on top of v9's client-knowledge-and-
     // recent-posts section: intel context + do-not-repeat constraints). v1
     // to v9 stay on disk frozen.
-    const expectedCopyPrompt = readFileSync(path.join(PROMPTS_ROOT, "instagram-copy", "10.md"), "utf8");
+    const expectedCopyPrompt = readFileSync(path.join(PROMPTS_ROOT, "instagram-copy", "11.md"), "utf8");
     // SCRUM-298: `system` now also carries the response contract, appended
     // after the resolved skill body — assert the prefix, not exact equality.
     const copyCall = (copyRouter.complete as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;

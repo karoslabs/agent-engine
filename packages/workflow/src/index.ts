@@ -19,3 +19,7 @@ export * from "./primitives/context-doc.js";
 // SCRUM-242 (T-A10): the one shared BLOCK/DEGRADED policy table + enforcement
 // helper — appended the same way, one new line per new primitive.
 export * from "./primitives/context-doc-policy.js";
+// Social channel upgrades (2026-09): trend scouting + content-mode rotation, and
+// the shared media resolver for the text-first channels. Appended the same way.
+export * from "./primitives/social-trend-scout.js";
+export * from "./primitives/social-media.js";

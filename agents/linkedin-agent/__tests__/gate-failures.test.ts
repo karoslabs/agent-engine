@@ -10,6 +10,7 @@ function baseFields() {
     headline: "A headline",
     hashtags: ["HybridWork"],
     callToAction: "Think about it.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "Operations leaders",
     archetype: "teardown-framework" as const,
   };

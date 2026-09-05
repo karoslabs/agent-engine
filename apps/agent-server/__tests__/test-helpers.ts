@@ -74,14 +74,17 @@ export function goodLinkedInDraft() {
   const hook = "We looked at attendance data across our hybrid client base this quarter, and the pattern surprised us.";
   const body = "Teams with a fixed two-day in-office schedule reported fewer scheduling conflicts than teams with fully flexible policies.";
   const callToAction = "If your team is still negotiating its hybrid policy week to week, a fixed anchor-day structure might be worth testing.";
+  // linkedin-craft@5 (2026-09): `takeaway` is required and expected in `text`.
+  const takeaway = "Predictability, not enforcement, is what made the schedule stick.";
   return {
     headline: "Anchor days cut scheduling friction",
     hook,
     body,
+    takeaway,
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction,
     targetAudience: "People leaders evaluating hybrid work policies",
-    text: `${hook}\n\n${body}\n\n${callToAction}`,
+    text: `${hook}\n\n${body}\n\n${takeaway}\n\n${callToAction}`,
     archetype: "industry-reaction",
   };
 }
@@ -199,10 +202,12 @@ export function makeSharedPromptStore(): InMemoryPromptStore {
   store.setPrompt("x-craft", "2", "X craft guidance.");
   store.setPrompt("x-craft", "3", "X craft guidance.");
   store.setPrompt("x-craft", "4", "X craft guidance.");
+  store.setPrompt("x-craft", "5", "X craft guidance.");
   store.setPrompt("linkedin-craft", "1", "LinkedIn craft guidance.");
   store.setPrompt("linkedin-craft", "2", "LinkedIn craft guidance.");
   store.setPrompt("linkedin-craft", "3", "LinkedIn craft guidance.");
   store.setPrompt("linkedin-craft", "4", "LinkedIn craft guidance.");
+  store.setPrompt("linkedin-craft", "5", "LinkedIn craft guidance.");
   store.setPrompt("reddit-craft", "1", "Reddit craft guidance.");
   store.setPrompt("reddit-craft", "2", "Reddit craft guidance.");
   store.setPrompt("reddit-craft", "3", "Reddit craft guidance.");

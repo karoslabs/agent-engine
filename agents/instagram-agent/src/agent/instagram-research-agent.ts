@@ -20,6 +20,17 @@ import { ResearchOutputSchema, type ResearchOutput } from "../workflow/types.js"
  * context-wise — the "context bloat" legacy defect (RFC-03 §1) this whole
  * migration exists to avoid — since the agent only ever sees one already-
  * fetched payload, never a growing pile of prior runs' raw research.
+ *
+ * ## Model (2026-09)
+ *
+ * Gemini 2.5 Flash on Vertex, `pinned` (never silently substituted). This is
+ * an EXTRACTION step: it reads a raw research payload and returns sourced,
+ * dated facts as structured output. It is not client-facing copy, so voice
+ * is not what it needs; a large window and cheap tokens are. Sonnet cost
+ * roughly ten times as much per run here for no measured quality gain on a
+ * read-and-list task. Retargetable per deployment
+ * (`MODEL_STEP_INSTAGRAM_RESEARCH_VENDOR/_MODEL`) and per run in Studio
+ * (`stageModels["instagram-research"]`).
  */
 export class InstagramResearchAgent extends BaseAgent<ResearchOutput> {
   protected readonly config: AgentStepConfig<ResearchOutput> = {
@@ -27,10 +38,7 @@ export class InstagramResearchAgent extends BaseAgent<ResearchOutput> {
     description: "Extract sourced, dated facts worth carrying into carousel slide copy from one already-fetched raw research payload.",
     allowedTools: [],
     outputSchema: ResearchOutputSchema,
-    // Pinned — same rationale as every other agent in this repo (RFC-02 §5):
-    // even an extraction-flavored step never silently falls back to a
-    // different model mid-run.
-    modelPolicy: resolveModelPolicy("instagram-research", { policy: "pinned", model: "claude-sonnet-4-6" }),
+    modelPolicy: resolveModelPolicy("instagram-research", { policy: "pinned", model: "gemini-2.5-flash", vendor: "gemini" }),
     skillRef: "instagram-research@1",
   };
 }

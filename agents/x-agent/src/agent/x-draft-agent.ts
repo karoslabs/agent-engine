@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BaseAgent, resolveModelPolicy, type AgentStepConfig } from "@agent-engine/core";
+import { MediaBriefSchema } from "@agent-engine/workflow";
 
 /**
  * The six content lanes (`references/lanes.md` in x-agent-v2): what this
@@ -20,6 +21,9 @@ export const LANE_VALUES = [
 export const LaneSchema = z.enum(LANE_VALUES);
 export type Lane = z.infer<typeof LaneSchema>;
 
+/** The most parts a thread may run to. Past seven, X readers stop; past seven, a writer is padding. */
+export const MAX_THREAD_PARTS = 7;
+
 /**
  * A single X post (RFC-02 §3). `text` and `mainPostText` are required to
  * carry identical content (enforced by prompt instruction, not a schema
@@ -35,6 +39,13 @@ export type Lane = z.infer<typeof LaneSchema>;
  * SKILL.md step 09's draft artifact (`{text, parts?, first_reply?}`) and is
  * what the workflow's link-placement check (x-craft.md §5: "post the idea
  * clean and put the link in the first reply") actually inspects.
+ *
+ * 2026-09 (x-craft@5): `thread` restores SKILL.md's `parts?` — the
+ * continuation posts of a thread, each its own ≤280-character post, empty for
+ * a single post. `mediaBrief` is the draft's own statement of what visual (if
+ * any) the post wants, answered afterwards by the shared media resolver; a
+ * client-attached image arrives BEFORE drafting as `attachedMedia` in the
+ * input, and the brief is then moot.
  */
 export const XPostOutputSchema = z.object({
   text: z.string().min(1),
@@ -50,6 +61,10 @@ export const XPostOutputSchema = z.object({
   /** Only meaningful when `lane === "engagement"`: the specific post URL being replied to or quoted. */
   targetPostUrl: z.string().url().optional(),
   mediaRefs: z.array(z.string()).default([]),
+  /** Continuation parts 2..N of a thread, in order. Empty for a single post. Part 1 is `text`. */
+  thread: z.array(z.string().min(1)).max(MAX_THREAD_PARTS - 1).default([]),
+  /** What visual this post wants, if any. Omitted when the run attached media (the copy was written to it). */
+  mediaBrief: MediaBriefSchema.optional(),
 });
 export type XPostOutput = z.infer<typeof XPostOutputSchema>;
 
@@ -84,12 +99,16 @@ const X_SPECIFIC_BANNED_PHRASES = ["i'm going to say it:", "great post", "this �
 export class XDraftAgent extends BaseAgent<XPostOutput> {
   protected readonly config: AgentStepConfig<XPostOutput> = {
     id: "x-draft",
-    description: "Draft a single X post for the selected candidate topic, lane and angle.",
+    description: "Draft a single X post (optionally with thread parts) for the selected candidate topic, lane, content mode and angle, and state what visual it wants.",
     allowedTools: ["render.preview", "gate.lintPost", "gate.numbersSourced", "gate.brandCompliance"],
     outputSchema: XPostOutputSchema,
     // Pinned — RFC-02 §3: claude-sonnet-4-6 today, claude-sonnet-5 is an
     // equally acceptable pin once available; never a fallback for a pinned step.
-    modelPolicy: resolveModelPolicy("x-draft", { policy: "pinned", model: "claude-sonnet-4-6" }),
+    // This is the client-facing copy step: it keeps Claude for voice while the
+    // trend scout and vision steps around it run on Gemini Flash. Studio can
+    // move it per run (stageModels["x-draft"]); `contentLanguageSensitive`
+    // lets a non-English client's brand kit re-point it per client (AU34).
+    modelPolicy: resolveModelPolicy("x-draft", { policy: "pinned", model: "claude-sonnet-4-6", contentLanguageSensitive: true }),
     // Pinned to "3": v3 adds a language check to §3 (Voice) against
     // `clientVoiceContext` (the client's own profile description +
     // voice-rules guidelines) — nothing before it ever forwarded `profile`
@@ -103,7 +122,16 @@ export class XDraftAgent extends BaseAgent<XPostOutput> {
     // as authoritative before external facts, and recentPosts (the shipped-
     // output dedup window this agent now writes back into on delivery) is a
     // hard do-not-repeat constraint. v3 stays frozen.
-    skillRef: "x-craft@4",
+    // Pinned to "5" (2026-09): v5 is the elite-tier rewrite. The draft now
+    // receives the RESEARCH itself (`research`: every fetched source's title,
+    // url, date, excerpt — until now it got a headline), a scouted trend
+    // candidate with its brand-fit bridge, a content mode (hot news / deep
+    // value / open discussion) to write in, and any client-attached media
+    // described by a vision model. It may write a thread when the material
+    // earns one, must state a `mediaBrief` (screenshots and data over
+    // illustration, "none" is a valid answer), and carries the machine-
+    // writing tells to avoid. v4 stays frozen.
+    skillRef: "x-craft@5",
     selfCritique: {
       gateTool: "gate.lintPost",
       maxRevisions: 1,

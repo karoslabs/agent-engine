@@ -25,7 +25,7 @@ import { InstagramCopyOutputSchema, type InstagramCopyOutput } from "../workflow
 export class InstagramCopyAgent extends BaseAgent<InstagramCopyOutput> {
   protected readonly config: AgentStepConfig<InstagramCopyOutput> = {
     id: "instagram-copy",
-    description: "Write 6-8 Instagram carousel slides, one idea each, every claim traced to a sourced research fact.",
+    description: "Write an Instagram post in the requested format: 6-8 carousel slides (one idea each) or one designed slide with a deep caption, every claim traced to a sourced research fact.",
     allowedTools: [],
     outputSchema: InstagramCopyOutputSchema,
     // Pinned — RFC-02 §5's rationale applies identically here: drafting/
@@ -111,6 +111,13 @@ export class InstagramCopyAgent extends BaseAgent<InstagramCopyOutput> {
     // §11, and tells the model it bears on `visualNeed`/archetype choice and
     // outranks this guide's own generic instincts when the two conflict.
     // v9 stays frozen.
-    skillRef: "instagram-copy@10",
+    // Pinned to "11" (2026-09): v11 adds the elite-tier sections. §12 the
+    // post FORMAT (`format`: a 6-8 slide carousel, or a single designed slide
+    // with a deep caption that carries the argument in short lines), §13
+    // `attachedMedia` (the client's uploads as a vision model described them,
+    // so slide N is written TO the client's picture N), and §14
+    // `trendCandidate` (a scouted story with its angle, hook, why-now and
+    // brand-fit bridge). v10 stays frozen.
+    skillRef: "instagram-copy@11",
   };
 }

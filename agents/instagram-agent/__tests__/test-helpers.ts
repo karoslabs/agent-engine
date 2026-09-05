@@ -191,6 +191,7 @@ const GOOD_VISUAL_NEEDS = [
 /** Six clean slides, one per `SIX_RESEARCH_FACTS` entry, each `sourceRef` matching a fact's `claim` verbatim. */
 export function goodCopyOutput(): InstagramCopyOutput {
   return {
+    format: "carousel",
     caption: "A quick look at the process changes that actually moved the needle this quarter, and what teams did differently.",
     slides: SIX_RESEARCH_FACTS.map((fact, i) => ({
       n: i + 1,

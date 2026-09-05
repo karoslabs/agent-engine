@@ -28,6 +28,7 @@ function goodDraft() {
     body: "Teams with a fixed two-day in-office schedule reported meaningfully fewer scheduling conflicts than teams with fully flexible policies.",
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "If your team is still negotiating its hybrid policy week to week, a fixed anchor-day structure might be worth testing.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "People leaders evaluating hybrid work policies",
     archetype: "teardown-framework" as const,
     text:
@@ -74,7 +75,7 @@ describe("checkpoint resume idempotency (RFC-01 §8.1)", () => {
     expect(callCounts()).toEqual(countsAfterFirst);
 
     const stepRecords = await durableStore.listSteps(params.runId);
-    expect(stepRecords).toHaveLength(24); // AU20 added the verified-dedupe step
+    expect(stepRecords).toHaveLength(27); // AU20 added the verified-dedupe step
     expect(stepRecords.every((s) => s.status === "completed")).toBe(true);
   });
 
@@ -136,7 +137,7 @@ describe("checkpoint resume idempotency (RFC-01 §8.1)", () => {
     expect(callCounts()["ledger.writeDeliverable"]).toBe(draftCallCountAfterCrash);
 
     const finalSteps = await durableStore.listSteps(runId);
-    expect(finalSteps).toHaveLength(24); // AU20 added the verified-dedupe step
+    expect(finalSteps).toHaveLength(27); // AU20 added the verified-dedupe step
     expect(finalSteps.every((s) => s.status === "completed")).toBe(true);
   });
 });

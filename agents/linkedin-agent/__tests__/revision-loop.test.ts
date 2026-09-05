@@ -19,6 +19,7 @@ function draft(text: string) {
     body: text,
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "If your team is still negotiating its hybrid policy, a fixed anchor-day structure might be worth testing.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "People leaders evaluating hybrid work policies",
     archetype: "teardown-framework" as const,
     text,

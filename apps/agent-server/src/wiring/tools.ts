@@ -93,8 +93,11 @@ export function createServerTools(workspaceStore: WorkspaceStoreLike, env: Recor
     ...createKarosLandingTools(createLandingEngineConfigFromEnv({ env }), archiveStore, workspaceStore),
     // `mediaStore` doubles as Tier 0's gs:// reader: a client's upload lives in
     // the same bucket the deliverables do, and giving the media tools a second
-    // GCS client for one read would be two credentials for one job.
-    ...createKarosMediaTools({ env, ...(mediaStore ? { objectReader: mediaStore } : {}) }),
+    // GCS client for one read would be two credentials for one job. It is also
+    // (2026-09) where `media.stageAsset` uploads a chosen X/LinkedIn image so
+    // the deliverable carries a URL the portal can re-host — the same store
+    // `publish.renderCarousel` already writes its PNGs to.
+    ...createKarosMediaTools({ env, ...(mediaStore ? { objectReader: mediaStore, mediaStore } : {}) }),
     // The write side of a client's setup documents. Merged in for every
     // product because the registry is shared, but only the setup workflows
     // name it in a step -- a drafting agent that never calls it cannot

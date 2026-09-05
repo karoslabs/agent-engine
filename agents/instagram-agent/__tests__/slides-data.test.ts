@@ -35,6 +35,7 @@ const CANVAS = { w: 1080, h: 1440, scale: 2, slides_min: 6, slides_max: 8 };
 
 function copyWith(overrides: Partial<InstagramCopyOutput["slides"][number]>[]): InstagramCopyOutput {
   return {
+    format: "carousel",
     caption: "A short caption for the fixture carousel.",
     slides: overrides.map((o, i) => ({
       n: i + 1,
@@ -129,6 +130,7 @@ describe("assembleSlidesData: per-slide layout routing", () => {
     // carousel's own text (`detectDirection`), then threaded onto every
     // slide's `fields`, across every archetype branch of `contentFor`.
     const hebrewCopy = {
+      format: "carousel" as const,
       caption: "מדריך שיווק קצר לכל מי שרוצה לצמוח ברשתות החברתיות בעולם",
       slides: [
         {

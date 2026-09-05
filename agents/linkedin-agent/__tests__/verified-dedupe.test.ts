@@ -47,6 +47,7 @@ function draft(text: string) {
     body: text,
     hashtags: ["HybridWork", "FutureOfWork"],
     callToAction: "Worth testing on your own team before the next planning cycle.",
+    takeaway: "Predictability, not enforcement, is what made the schedule stick.",
     targetAudience: "People leaders evaluating hybrid work policies",
     archetype: "teardown-framework" as const,
     text,

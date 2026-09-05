@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { readForbiddenTopics } from "@agent-engine/core";
 import type { AgentContext, AgentTool, AgentToolRegistry, GateResponse, ModelRouter, PromptStore, StyleEdit, TemplateFeedback } from "@agent-engine/core";
-import { type WorkflowContext, type RevisionNote, WorkflowBlockedIntake, WorkflowHeld, WorkflowToolingFailure, runAutoSetup, runReviewCycle, runTopicGuardrail, readRunDirection, revisionDirective, runDirectionField, buildClientVoiceContext, readOutputHistoryForDedup, dedupeDirective, checkOutputDedupe, dedupeRetryDirective, readClientIntelContext, readContextDoc, enforceContextDocPolicy, toAgentContext, distillStylePreferences, varyLearnedStyle, type DistilledStyle, type FeedbackEntryLike, type StyleVariationEntry } from "@agent-engine/workflow";
+import { type WorkflowContext, type RevisionNote, WorkflowBlockedIntake, WorkflowHeld, WorkflowToolingFailure, runAutoSetup, runReviewCycle, runTopicGuardrail, readRunDirection, revisionDirective, runDirectionField, buildClientVoiceContext, readOutputHistoryForDedup, dedupeDirective, checkOutputDedupe, dedupeRetryDirective, readClientIntelContext, readContextDoc, enforceContextDocPolicy, toAgentContext, distillStylePreferences, varyLearnedStyle, buildTrendQueries, pullTrendResearch, runTrendScout, researchDigestForScout, selectTrendCandidate, trendCandidateForDrafting, CONTENT_MODES, type DistilledStyle, type FeedbackEntryLike, type StyleVariationEntry } from "@agent-engine/workflow";
+import type { InstagramFormat, InstagramTopicClaim as InstagramTopicClaimShape } from "./types.js";
 import type { RenderCarouselInput, RenderCarouselResult } from "@agent-engine/tool-karos-publish";
 import { InstagramCopyAgent } from "../agent/instagram-copy-agent.js";
 import { InstagramImageVettingAgent } from "../agent/instagram-image-vetting-agent.js";
@@ -625,6 +626,12 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       const requestedLane = typeof runConfig["requestedLane"] === "string" ? (runConfig["requestedLane"] as string) : undefined;
       const requestedSubject = typeof runConfig["requestedSubject"] === "string" ? (runConfig["requestedSubject"] as string) : undefined;
       const requestedPostNumber = typeof runConfig["postNumber"] === "number" ? (runConfig["postNumber"] as number) : undefined;
+      // The post format (2026-09): this run's own request first, then the
+      // client's standing setting. Anything but the three known values is
+      // ignored so a typo cannot switch a client's whole feed to single images.
+      const isFormatChoice = (v: unknown): v is "carousel" | "single" | "auto" => v === "carousel" || v === "single" || v === "auto";
+      const runFormat = (wf.input ?? {})["requestedFormat"];
+      const requestedFormat = isFormatChoice(runFormat) ? runFormat : isFormatChoice(runConfig["instagramFormat"]) ? runConfig["instagramFormat"] : undefined;
       // `wf.runId` is already a caller-supplied, globally-unique idempotency
       // key (RFC-01 §9.1 rule 2), so it doubles as `postId` directly — a
       // dedicated sequential-counter tool (RFC-03 §3's suggested
@@ -637,6 +644,7 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
         postNumber: requestedPostNumber ?? 1,
         ...(requestedLane !== undefined ? { requestedLane } : {}),
         ...(requestedSubject !== undefined ? { requestedSubject } : {}),
+        ...(requestedFormat !== undefined ? { requestedFormat } : {}),
       };
     });
 
@@ -998,7 +1006,7 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
     const renderRules = frozen.styleConfig.rules.filter((r) => r.check === "render");
 
     // ── 03: claim the subject — the catalog first, then the same fallbacks every other channel already has ──
-    const topicClaim = await wf.step.code("03-claim-topic", async (): Promise<InstagramTopicClaim> => {
+    const claimedTopic = await wf.step.code("03-claim-topic", async (): Promise<InstagramTopicClaim> => {
       const reservationKey = `${wf.runId}__topic`;
       const lane = runClaim.requestedLane ?? DEFAULT_CAROUSEL_LANE;
 
@@ -1112,6 +1120,89 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       );
     });
 
+    // ── 04e: what this agent already SHIPPED for this client ──
+    //
+    // The anti-repetition read: the rolling excerpt window this run's own
+    // deliver step (09b) writes back into. Read once, used three times — as a
+    // hard do-not-repeat directive in the copy prompt, as the corpus the
+    // post-draft similarity check (07d) scores against, and (2026-09) as the
+    // list the trend scout must steer clear of. Read HERE, before the topic is
+    // final, for that third use.
+    const outputHistory = await readOutputHistoryForDedup(wf, tools, ctx, "instagram-agent", "04e-read-output-history");
+    const recentPostsDirective = dedupeDirective(outputHistory);
+
+    // ── 04f: the client's own intel report and knowledge base, as authoritative drafting context ──
+    //
+    // `intel.getReport` has been registered in every agent's registry since
+    // the intel agent shipped, with zero channel-agent callers — a client
+    // could pay for a full intel report (voice rows, positioning, whitespace
+    // opportunities) and have their caption writer never see a word of it.
+    const clientIntelContext = await readClientIntelContext(wf, tools, ctx, "04f-read-intel-context");
+
+    // ── 03a-03c: the trend scout, only on the fallback path (2026-09) ──
+    //
+    // Step 03 falls back to `${industry} trends this week` when nobody planned
+    // this run's subject — a query, not a subject, and the research step then
+    // researched the query. Now that path pulls the field's news (several
+    // questions, cached), asks the scout for brand-fit-scored candidates, and
+    // takes the strongest on-brand one. A planned catalog row or a typed
+    // request is untouched: the scout never outranks a person's choice.
+    let topicClaim: InstagramTopicClaimShape = claimedTopic;
+    if (claimedTopic.source === "research") {
+      const trendProfile = await wf.step.code("03a-load-trend-profile", async () => {
+        const profileOutcome = await tools["client.getProfile"]!.execute({}, { ctx });
+        const profile = profileOutcome.status === "success" ? (profileOutcome.result as Record<string, unknown>) : {};
+        const configOutcome = await tools["client.getConfig"]!.execute({}, { ctx });
+        const config = configOutcome.status === "success" ? (configOutcome.result as Record<string, unknown>) : {};
+        const configured = Array.isArray(config["trendQueries"]) ? (config["trendQueries"] as unknown[]).filter((q): q is string => typeof q === "string" && q.trim().length > 0) : [];
+        return {
+          profile,
+          industry: typeof profile["industry"] === "string" ? (profile["industry"] as string) : undefined,
+          companyName: typeof profile["companyName"] === "string" ? (profile["companyName"] as string) : typeof profile["name"] === "string" ? (profile["name"] as string) : undefined,
+          trendQueries: configured,
+          forbiddenTopics: readForbiddenTopics(config),
+        };
+      });
+      const queries = buildTrendQueries({ industry: trendProfile.industry, companyName: trendProfile.companyName, configuredQueries: trendProfile.trendQueries });
+      const trendResearch = await pullTrendResearch(wf, tools, ctx, {
+        stepId: "03b-trend-research-pull",
+        job: "instagram-trend-scan",
+        queries: queries.length > 0 ? queries : [claimedTopic.topic],
+        window: "7d",
+        historyAgentId: "instagram-agent",
+      });
+      const scout = await runTrendScout(wf, { tools, promptStore: options.promptStore, router: options.router }, "03c-trend-scout", {
+        research: researchDigestForScout(trendResearch.merged),
+        channel: "instagram",
+        clientProfile: trendProfile.profile,
+        ...(clientIntelContext !== undefined ? { clientIntelContext } : {}),
+        ...(clientVoiceContext !== undefined ? { clientVoiceContext } : {}),
+        ...(recentPostsDirective !== undefined ? { recentPosts: recentPostsDirective } : {}),
+        forbiddenTopics: trendProfile.forbiddenTopics,
+        today: new Date().toISOString().slice(0, 10),
+      });
+      if (scout !== undefined) {
+        // This agent keeps no decision log, so the content mode rotates on the
+        // count of shipped posts: hot news, deep value, open discussion, in turn.
+        const mode = CONTENT_MODES[outputHistory.length % CONTENT_MODES.length]!;
+        const avoidTopics = outputHistory.map((h) => h.excerpt.split("\n").find((l) => l.trim().length > 0) ?? "").filter((l) => l.length > 0);
+        const trend = selectTrendCandidate(scout.candidates, mode, { avoidTopics });
+        if (trend !== undefined) topicClaim = { topic: trend.topic, source: "trend", trend };
+      }
+    }
+
+    // ── 04h: the post format — a request, the client's setting, or the rotation ──
+    //
+    // `carousel` unless someone asked otherwise. `auto` makes every third post
+    // a single image with a deep caption, counted on the shipped-output window
+    // so the rotation survives restarts without a decision log of its own.
+    const format = await wf.step.code("04h-select-format", (): { format: InstagramFormat; source: string } => {
+      const requested = runClaim.requestedFormat;
+      if (requested === "single" || requested === "carousel") return { format: requested, source: "requested" };
+      if (requested === "auto") return { format: outputHistory.length % 3 === 2 ? "single" : "carousel", source: "rotation" };
+      return { format: "carousel", source: "default" };
+    });
+
     // ── 04: research the subject — verbatim raw payload capture, then judgment ──
     const researchPull = await wf.step.code("04a-research-pull", async () => {
       const outcome = await tools["research.pull"]!.execute(
@@ -1208,14 +1299,64 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       }
 
       const result = outcome.result as { candidates: ImageCandidate[]; unmet: Array<{ slot: number; reason: string }> };
+
+      // ── A vision model READS the client's pictures (2026-09) ──
+      //
+      // Until now the copy step wrote slide 1 with no idea what the client's
+      // photo on slide 1 showed, and the vetting step judged that photo from
+      // the licence line this pipeline itself wrote. `media.inspectImages`
+      // describes each upload; the description reaches the copy prompt as
+      // `attachedMedia` (so the words are written TO the picture) and is
+      // appended to the candidate's own description (so the vetting judgment
+      // is about what is actually in frame). Best-effort: no vision backend,
+      // or a failed call, leaves the upload exactly as it was.
+      const inspect = tools["media.inspectImages"];
+      let analyses: Array<{ slot: number; description: string; subjects: string[]; textInImage: string[]; mood: string; suggestedAngle?: string }> = [];
+      let candidates = result.candidates;
+      let visionNote: string | undefined;
+      if (inspect !== undefined && result.candidates.length > 0) {
+        const inspected = await inspect.execute(
+          { repoRoot: options.repoRoot, images: result.candidates.slice(0, 12).map((c, i) => ({ ref: `attached-${i + 1}`, path: c.path })), purpose: "attached-media" },
+          { ctx },
+        );
+        if (inspected.status === "success") {
+          const byRef = new Map(((inspected.result as { inspections: Array<Record<string, unknown>> }).inspections).map((i) => [i["ref"] as string, i]));
+          analyses = result.candidates.flatMap((_, i) => {
+            const found = byRef.get(`attached-${i + 1}`);
+            if (!found) return [];
+            return [
+              {
+                slot: i + 1,
+                description: String(found["description"] ?? ""),
+                subjects: (found["subjects"] as string[] | undefined) ?? [],
+                textInImage: (found["textInImage"] as string[] | undefined) ?? [],
+                mood: String(found["mood"] ?? ""),
+                ...(typeof found["suggestedAngle"] === "string" ? { suggestedAngle: found["suggestedAngle"] as string } : {}),
+              },
+            ];
+          });
+          candidates = result.candidates.map((c, i) => {
+            const found = byRef.get(`attached-${i + 1}`);
+            return found ? { ...c, description: `${c.description} [vision: ${String(found["description"] ?? "")}${Array.isArray(found["textInImage"]) && (found["textInImage"] as string[]).length > 0 ? `; text in image: ${(found["textInImage"] as string[]).join(" / ")}` : ""}]` } : c;
+          });
+        } else {
+          visionNote = `vision inspection of the attachments did not complete (${inspected.status}${"reason" in inspected ? `: ${inspected.reason}` : ""})`;
+        }
+      }
+
+      const notes = [
+        ...(result.unmet.length > 0 ? [result.unmet.map((u) => `slide ${u.slot}: ${u.reason}`).join("; ")] : []),
+        ...(visionNote !== undefined ? [visionNote] : []),
+      ];
       return {
-        candidates: result.candidates,
+        candidates,
         // Only the slides an asset actually landed on. An attachment that
         // failed to ingest must not reserve a slide the harvesters would then
         // skip, which would leave it empty for the rest of the run.
         slots: result.candidates.map((_, index) => index + 1),
         attached: usable.length,
-        ...(result.unmet.length > 0 ? { note: result.unmet.map((u) => `slide ${u.slot}: ${u.reason}`).join("; ") } : {}),
+        analyses,
+        ...(notes.length > 0 ? { note: notes.join("; ") } : {}),
       };
     });
 
@@ -1538,22 +1679,8 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       }
     });
 
-    // ── 04e: what this agent already SHIPPED for this client ──
-    //
-    // The anti-repetition read: the rolling excerpt window this run's own
-    // deliver step (09b) writes back into. Read once, used twice — as a hard
-    // do-not-repeat directive in the copy prompt, and as the corpus the
-    // post-draft similarity check (07d) scores against.
-    const outputHistory = await readOutputHistoryForDedup(wf, tools, ctx, "instagram-agent", "04e-read-output-history");
-    const recentPostsDirective = dedupeDirective(outputHistory);
-
-    // ── 04f: the client's own intel report, as authoritative drafting context ──
-    //
-    // `intel.getReport` has been registered in every agent's registry since
-    // the intel agent shipped, with zero channel-agent callers — a client
-    // could pay for a full intel report (voice rows, positioning, whitespace
-    // opportunities) and have their caption writer never see a word of it.
-    const clientIntelContext = await readClientIntelContext(wf, tools, ctx, "04f-read-intel-context");
+    // (04e-read-output-history and 04f-read-intel-context moved above step 04a
+    // in 2026-09 so the trend scout can read them; same step ids, same reads.)
 
     /**
      * The reviewer's structured colour pick from the PREVIOUS round's gate
@@ -1820,6 +1947,16 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       const copyExec = await wf.step.agent(rev(`05-write-copy-attempt-${attempt}`), copyAgent, {
         ...runDirectionField(runDirection),
         topic: topicClaim.topic,
+        // The post format (2026-09): `carousel` (6-8 slides) or `single` (one
+        // designed slide and a deep caption). The copy step echoes it back and
+        // `checkSlidesData` holds the slide count to it.
+        format: format.format,
+        // The scouted story, when one took the slot: angle, hook, why-now, the
+        // brand-fit bridge, and the source URLs it rests on.
+        ...(topicClaim.trend !== undefined ? { trendCandidate: trendCandidateForDrafting(topicClaim.trend) } : {}),
+        // What the client attached, as a vision model described it — slide N
+        // is written TO the client's picture N.
+        ...("analyses" in tier0Pool && tier0Pool.analyses.length > 0 ? { attachedMedia: tier0Pool.analyses } : {}),
         facts: research.facts,
         styleConfig: {
           rules: frozen.styleConfig.rules,
@@ -2036,6 +2173,50 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
         );
         unfillable = selections.filter(isUnfillable);
       } else {
+        // ── 05c: a vision model looks at the candidates BEFORE the vetting judgment (2026-09) ──
+        //
+        // The vetting agent judges from text. Until now that text was a
+        // provider's alt string, so a watermark, a cookie banner or a picture
+        // of the wrong thing entirely sailed through when the alt text was
+        // agreeable. Now each candidate carries what a vision model actually
+        // saw, and the ones it grades unusable or watermarked never reach the
+        // gate at all. Best-effort: no vision backend, or a failed call, leaves
+        // the pool exactly as it was.
+        const inspectTool = tools["media.inspectImages"];
+        if (inspectTool !== undefined) {
+          attemptPool = await wf.step.code(rev(`05c-inspect-candidates-attempt-${attempt}`), async (): Promise<ImageCandidate[]> => {
+            const enriched: ImageCandidate[] = [];
+            let dropped = 0;
+            for (let start = 0; start < attemptPool.length; start += 12) {
+              const batch = attemptPool.slice(start, start + 12);
+              const inspected = await inspectTool.execute(
+                { repoRoot: options.repoRoot, images: batch.map((c, i) => ({ ref: `c-${start + i}`, path: c.path })), purpose: "candidate-vetting" },
+                { ctx },
+              );
+              if (inspected.status !== "success") {
+                enriched.push(...batch);
+                continue;
+              }
+              const byRef = new Map(((inspected.result as { inspections: Array<Record<string, unknown>> }).inspections).map((i) => [i["ref"] as string, i]));
+              batch.forEach((c, i) => {
+                const found = byRef.get(`c-${start + i}`);
+                if (!found) {
+                  enriched.push(c);
+                  return;
+                }
+                if (found["quality"] === "unusable" || found["hasWatermark"] === true) {
+                  dropped += 1;
+                  return;
+                }
+                const text = Array.isArray(found["textInImage"]) && (found["textInImage"] as string[]).length > 0 ? `; text in image: ${(found["textInImage"] as string[]).join(" / ")}` : "";
+                const flags = [found["looksLikeScreenshot"] === true ? "screenshot/document" : "", found["looksAiGenerated"] === true ? "looks AI-generated" : ""].filter(Boolean).join(", ");
+                enriched.push({ ...c, description: `${c.description} [vision: ${String(found["description"] ?? "")}${text}${flags ? `; ${flags}` : ""}]` });
+              });
+            }
+            if (dropped > 0) sourcingReason = `${sourcingReason ? `${sourcingReason}; ` : ""}${dropped} candidate(s) dropped by vision inspection (watermarked or unusable)`;
+            return enriched;
+          });
+        }
         const imageExec = await wf.step.agent(rev(`06-vet-images-attempt-${attempt}`), imageAgent, {
           // Only the photo slides are put in front of the gate. A typographic
           // archetype has nothing for it to judge, and including it would ask
@@ -2531,8 +2712,56 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
       //         step 07/07b above, matching carousel-agent-v2 SKILL.md step
       //         08's "a fail here is RETURN: 05, because it is the copy or
       //         the layout, not the code." ──
+      // ── 08a4: a vision model LOOKS at the rendered PNGs (2026-09) ──
+      //
+      // The QA agent has always judged from structured slide data and said so
+      // in its own prompt ("you do NOT see the actual rendered pixels"). With
+      // `media.inspectImages` in the registry it can: each rendered slide is
+      // described — legible text, quality grade, whether it reads as a
+      // finished slide — and the descriptions ride into the QA input as
+      // `renderedInspections`. Best-effort: no vision backend, or a failed
+      // call, leaves the QA exactly as it was.
+      const inspectRendered = tools["media.inspectImages"];
+      let renderedInspections: Array<Record<string, unknown>> = [];
+      if (inspectRendered !== undefined && renderedAttempt.rendered.length > 0) {
+        renderedInspections = await wf.step.code(rev(`08a4-inspect-rendered-attempt-${attempt}`), async (): Promise<Array<Record<string, unknown>>> => {
+          const images = renderedAttempt.rendered.slice(0, 12).flatMap((r): Array<{ ref: string; url?: string; path?: string }> => {
+            if (/^https?:\/\//i.test(r.path)) return [{ ref: `slide-${r.n}`, url: r.path }];
+            // The renderer writes a local file when no media store is
+            // configured; the vision tool takes it repo-relative and bounds-checks it.
+            const relative = path.isAbsolute(r.path) ? path.relative(options.repoRoot, r.path) : r.path;
+            if (relative.startsWith("..")) return [];
+            return [{ ref: `slide-${r.n}`, path: relative.replace(/\\/g, "/") }];
+          });
+          if (images.length === 0) return [];
+          const outcome = await inspectRendered.execute(
+            {
+              repoRoot: options.repoRoot,
+              images,
+              purpose: "candidate-vetting",
+              brief: "a finished Instagram slide as it will be published: every word legible, nothing overlapping or cut off, not near-empty, the photo (if any) not fighting the text",
+            },
+            { ctx },
+          );
+          if (outcome.status !== "success") return [];
+          return (outcome.result as { inspections: Array<Record<string, unknown>> }).inspections.map((i) => ({
+            n: Number(String(i["ref"]).split("-")[1]),
+            description: i["description"],
+            textInImage: i["textInImage"],
+            quality: i["quality"],
+            qualityReason: i["qualityReason"],
+            ...(i["fitScore"] !== undefined ? { fitScore: i["fitScore"], fitReason: i["fitReason"] } : {}),
+          }));
+        });
+      }
+
       const elevatedCriteria = buildElevatedVisualQaCriteria({ logo: preChecks.brandAsset, kitPalette: effectiveKit?.palette ?? [] });
       const qaExec = await wf.step.agent(rev(`08b-visual-qa-attempt-${attempt}`), qaAgent, {
+        // The format (2026-09): a single-image post has no "closer" slide and
+        // a rule written for an eight-slide carousel does not apply to it.
+        format: copy.format,
+        // What a vision model saw in the actual PNGs, when one was available.
+        ...(renderedInspections.length > 0 ? { renderedInspections } : {}),
         slides: slidesDataForQa.slides.map((s) => ({ n: s.n, fields: s.fields, images: s.images })),
         renderRules: [...renderRules.map((r) => ({ id: r.id, description: r.description })), ...elevatedCriteria],
         // Facts the judge must not re-derive (per-criterion doc comments in
@@ -3016,6 +3245,10 @@ export function createInstagramAgentWorkflow(options: CreateInstagramAgentWorkfl
           deliverable: {
             postId: runClaim.postId,
             topic: topicClaim.topic,
+            // The format (2026-09) and, when a scouted story took the slot, its
+            // why-now and brand-fit bridge for the reviewer.
+            format: review.output.copy.format,
+            ...(topicClaim.trend !== undefined ? { trend: topicClaim.trend } : {}),
             caption,
             slides: slidesData.slides,
             rendered: rendered.rendered,

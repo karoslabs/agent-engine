@@ -16,6 +16,10 @@ defines the engine itself (this is the spec to build against first).
 [`docs/RFC-02-agent-migration.md`](docs/RFC-02-agent-migration.md) is the
 playbook for migrating each existing skill onto this engine — read it only
 once RFC-01's tool layer and `BaseAgent` exist.
+[`docs/RFC-12-social-agents-elite-tier.md`](docs/RFC-12-social-agents-elite-tier.md)
+is the 2026-09 review and upgrade of the X, LinkedIn and Instagram agents
+(vision-read media, trend-jacking with brand fit, platform craft, per-step
+model routing) and the place to look for each social step's recommended model.
 
 ## Relationship to other repos
 
